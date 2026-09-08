@@ -1,0 +1,120 @@
+# ============================================================
+# HireFlow - Git Ignore
+# ============================================================
+
+# -------------------------
+# Environment / Secrets
+# -------------------------
+.env
+.env.*
+!.env.example
+
+# API keys / credentials
+*.key
+*.pem
+credentials.json
+secrets.json
+
+# -------------------------
+# Python
+# -------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+
+*.so
+
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# -------------------------
+# Virtual Environments
+# -------------------------
+.venv/
+venv/
+env/
+ENV/
+
+
+# -------------------------
+# IDE / Editors
+# -------------------------
+.vscode/
+.idea/
+*.iml
+
+# VS Code local history
+.history/
+
+
+
+# -------------------------
+# HireFlow Runtime Data
+# -------------------------
+
+# Uploaded resumes / candidate PDFs
+data/resumes/*.pdf
+
+# Generated FAISS index
+data/hybrid_index/*.index
+
+# Generated index metadata
+data/hybrid_index/*.json
+
+# Recruiter memory
+data/memory/*.json
+
+
+# -------------------------
+# OS Files
+# -------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+Desktop.ini
+
+# -------------------------
+# Temporary Files
+# -------------------------
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
+
+
+# -------------------------
+# Model / Cache Files
+# -------------------------
+.cache/
+models/
+*.bin
+*.pkl
+*.pickle
+
+# -------------------------
+# Generated Reports
+# -------------------------
+reports/
+output/

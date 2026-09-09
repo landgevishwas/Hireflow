@@ -396,17 +396,37 @@ def rerank_candidate(
 def rerank_candidates(
     candidates: list[Candidate],
     job: JobDescription,
-    hybrid_scores: dict[str, float],
+    hybrid_scores: dict[str, float] | None = None,
+    retrieval_scores: dict[str, float | dict] | None = None,
 ) -> list[ReRankResult]:
-    """Re-rank multiple candidates."""
+    """Re-rank multiple candidates using hybrid retrieval scores.
+
+    ``hybrid_scores`` is the preferred interface. ``retrieval_scores`` is
+    accepted for compatibility with the Streamlit application, where each
+    value may be a result dictionary containing ``hybrid_score``.
+    """
+
+    if hybrid_scores is None:
+        hybrid_scores = {}
+
+    if retrieval_scores is not None:
+        for candidate_id, value in retrieval_scores.items():
+            if isinstance(value, dict):
+                hybrid_scores[candidate_id] = float(
+                    value.get("hybrid_score", 0.0)
+                )
+            else:
+                hybrid_scores[candidate_id] = float(value)
 
     results: list[ReRankResult] = []
 
     for candidate in candidates:
 
-        hybrid_score = hybrid_scores.get(
-            candidate.candidate_id,
-            0.0,
+        hybrid_score = float(
+            hybrid_scores.get(
+                candidate.candidate_id,
+                0.0,
+            )
         )
 
         result = rerank_candidate(

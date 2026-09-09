@@ -283,6 +283,17 @@ JOB DESCRIPTION:
             }
         )
 
+    def evaluate_candidate(
+        self,
+        candidate: Candidate,
+        job: JobDescription,
+    ) -> CandidateEvaluation:
+        """Compatibility alias used by the Streamlit UI."""
+        return self.evaluate(
+            candidate=candidate,
+            job=job,
+        )
+
 
 # ============================================================================
 # RANKING METRICS

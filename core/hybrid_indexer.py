@@ -1,4 +1,13 @@
-"""Hybrid semantic + keyword candidate index for HireFlow."""
+"""
+Hybrid semantic + keyword candidate index for HireFlow.
+
+Responsibilities:
+- FAISS semantic retrieval
+- BM25 keyword retrieval
+- Score normalization
+- Weighted hybrid ranking
+- Resume source-path preservation
+"""
 
 from __future__ import annotations
 
@@ -32,6 +41,10 @@ def tokenize(text: str) -> list[str]:
     )
 
 
+# ============================================================================
+# SCORE NORMALIZATION
+# ============================================================================
+
 def min_max_normalize(
     scores: list[float],
 ) -> list[float]:
@@ -49,6 +62,7 @@ def min_max_normalize(
     maximum = values.max()
 
     if maximum == minimum:
+
         if maximum == 0:
             return [0.0] * len(values)
 
@@ -76,12 +90,14 @@ class HybridSearchResult:
         hybrid_score: float,
         semantic_score: float,
         keyword_score: float,
+        source: str = "",
     ) -> None:
 
         self.candidate_id = candidate_id
-        self.hybrid_score = hybrid_score
-        self.semantic_score = semantic_score
-        self.keyword_score = keyword_score
+        self.hybrid_score = float(hybrid_score)
+        self.semantic_score = float(semantic_score)
+        self.keyword_score = float(keyword_score)
+        self.source = source
 
     def to_dict(self) -> dict:
 
@@ -90,6 +106,7 @@ class HybridSearchResult:
             "hybrid_score": self.hybrid_score,
             "semantic_score": self.semantic_score,
             "keyword_score": self.keyword_score,
+            "source": self.source,
         }
 
 
@@ -98,7 +115,14 @@ class HybridSearchResult:
 # ============================================================================
 
 class HybridIndexer:
-    """Manage FAISS + BM25 candidate retrieval."""
+    """
+    Manage FAISS + BM25 candidate retrieval.
+
+    Important:
+    Search results preserve the original resume source path.
+    This allows the UI to load the correct PDF even when
+    candidate_id does not exactly match the PDF filename.
+    """
 
     def __init__(self) -> None:
 
@@ -123,12 +147,21 @@ class HybridIndexer:
 
         self.load_keyword_index()
 
+
     # ------------------------------------------------------------------
     # KEYWORD INDEX
     # ------------------------------------------------------------------
 
     def build_keyword_index(self) -> int:
-        """Build BM25 from all PDFs currently in resume directory."""
+        """
+        Build BM25 from all PDFs currently in resume directory.
+
+        This stores:
+        - candidate_id
+        - source
+        - extracted text
+        - tokens
+        """
 
         documents = []
 
@@ -154,6 +187,7 @@ class HybridIndexer:
                 documents.append(
                     {
                         "candidate_id": pdf_path.stem,
+                        "source": str(pdf_path),
                         "text": text,
                         "tokens": tokenize(text),
                     }
@@ -175,11 +209,13 @@ class HybridIndexer:
 
         return len(documents)
 
+
     def _rebuild_bm25(self) -> None:
 
         if not self.documents:
 
             self.bm25 = None
+
             return
 
         tokenized_documents = [
@@ -191,6 +227,7 @@ class HybridIndexer:
             tokenized_documents
         )
 
+
     def _save_keyword_index(self) -> None:
 
         self.keyword_index_path.parent.mkdir(
@@ -200,10 +237,12 @@ class HybridIndexer:
 
         payload = [
             {
-                "candidate_id":
-                    item["candidate_id"],
-                "text":
-                    item["text"],
+                "candidate_id": item["candidate_id"],
+                "source": item.get(
+                    "source",
+                    "",
+                ),
+                "text": item["text"],
             }
             for item in self.documents
         ]
@@ -217,11 +256,13 @@ class HybridIndexer:
             encoding="utf-8",
         )
 
+
     def load_keyword_index(self) -> None:
 
         if not self.keyword_index_path.exists():
 
             self.documents = []
+
             self.bm25 = None
 
             return
@@ -245,15 +286,41 @@ class HybridIndexer:
                     )
                 )
 
+                candidate_id = str(
+                    item.get(
+                        "candidate_id",
+                        "",
+                    )
+                )
+
+                source = str(
+                    item.get(
+                        "source",
+                        "",
+                    )
+                )
+
+                # Backward compatibility:
+                # old index files may not contain source.
+                if not source and candidate_id:
+
+                    fallback = (
+                        Path(
+                            self.settings.resume_dir
+                        )
+                        / f"{candidate_id}.pdf"
+                    )
+
+                    if fallback.exists():
+
+                        source = str(
+                            fallback
+                        )
+
                 self.documents.append(
                     {
-                        "candidate_id":
-                            str(
-                                item.get(
-                                    "candidate_id",
-                                    "",
-                                )
-                            ),
+                        "candidate_id": candidate_id,
+                        "source": source,
                         "text": text,
                         "tokens": tokenize(text),
                     }
@@ -269,7 +336,9 @@ class HybridIndexer:
             )
 
             self.documents = []
+
             self.bm25 = None
+
 
     # ------------------------------------------------------------------
     # ADD ONE RESUME
@@ -284,9 +353,18 @@ class HybridIndexer:
         Add one resume to both semantic and keyword indexes.
         """
 
-        pdf_path = Path(pdf_path)
+        pdf_path = Path(
+            pdf_path
+        )
+
+        if not pdf_path.exists():
+
+            raise FileNotFoundError(
+                f"Resume not found: {pdf_path}"
+            )
 
         if candidate_id is None:
+
             candidate_id = pdf_path.stem
 
         text = extract_pdf_text(
@@ -313,19 +391,22 @@ class HybridIndexer:
             )
 
             self.vector_store.add(
-                embeddings=vector.reshape(1, -1),
+                embeddings=vector.reshape(
+                    1,
+                    -1,
+                ),
                 metadata=[
                     {
-                        "candidate_id":
-                            candidate_id,
-                        "source":
-                            str(pdf_path),
+                        "candidate_id": candidate_id,
+                        "source": str(
+                            pdf_path
+                        ),
                     }
                 ],
             )
 
         # --------------------------------------------------------------
-        # BM25 DOCUMENT
+        # BM25
         # --------------------------------------------------------------
 
         existing_index = next(
@@ -342,23 +423,27 @@ class HybridIndexer:
 
             self.documents.append(
                 {
-                    "candidate_id":
-                        candidate_id,
-                    "text":
-                        text,
-                    "tokens":
-                        tokenize(text),
+                    "candidate_id": candidate_id,
+                    "source": str(pdf_path),
+                    "text": text,
+                    "tokens": tokenize(text),
                 }
             )
 
         else:
 
+            existing_index["source"] = str(
+                pdf_path
+            )
+
             existing_index["text"] = text
+
             existing_index["tokens"] = tokenize(
                 text
             )
 
         self._rebuild_bm25()
+
         self._save_keyword_index()
 
         logger.info(
@@ -366,8 +451,9 @@ class HybridIndexer:
             candidate_id,
         )
 
+
     # ------------------------------------------------------------------
-    # ADD DIRECTORY
+    # ADD ALL RESUMES
     # ------------------------------------------------------------------
 
     def add_all_resumes(self) -> int:
@@ -401,8 +487,9 @@ class HybridIndexer:
 
         return count
 
+
     # ------------------------------------------------------------------
-    # SEARCH
+    # SEMANTIC SEARCH
     # ------------------------------------------------------------------
 
     def _semantic_search(
@@ -422,6 +509,11 @@ class HybridIndexer:
             top_k=top_k,
         )
 
+
+    # ------------------------------------------------------------------
+    # KEYWORD SEARCH
+    # ------------------------------------------------------------------
+
     def _keyword_search(
         self,
         query: str,
@@ -429,6 +521,7 @@ class HybridIndexer:
     ) -> list[dict]:
 
         if self.bm25 is None:
+
             return []
 
         query_tokens = tokenize(
@@ -436,6 +529,7 @@ class HybridIndexer:
         )
 
         if not query_tokens:
+
             return []
 
         scores = self.bm25.get_scores(
@@ -455,27 +549,48 @@ class HybridIndexer:
             ):
                 continue
 
+            document = self.documents[
+                index
+            ]
+
             results.append(
                 {
                     "candidate_id":
-                        self.documents[index][
+                        document[
                             "candidate_id"
                         ],
+
+                    "source":
+                        document.get(
+                            "source",
+                            "",
+                        ),
+
                     "score":
-                        float(scores[index]),
+                        float(
+                            scores[index]
+                        ),
                 }
             )
 
         return results
+
+
+    # ------------------------------------------------------------------
+    # SEARCH
+    # ------------------------------------------------------------------
 
     def search(
         self,
         query: str,
         top_k: int = 10,
     ) -> list[HybridSearchResult]:
-        """Perform normalized semantic + keyword search."""
+        """
+        Perform normalized semantic + keyword search.
+        """
 
         if not query.strip():
+
             return []
 
         retrieval_k = max(
@@ -484,6 +599,10 @@ class HybridIndexer:
             self.settings.keyword_top_k,
         )
 
+        # --------------------------------------------------------------
+        # Semantic
+        # --------------------------------------------------------------
+
         semantic_results = (
             self._semantic_search(
                 query,
@@ -491,12 +610,20 @@ class HybridIndexer:
             )
         )
 
+        # --------------------------------------------------------------
+        # Keyword
+        # --------------------------------------------------------------
+
         keyword_results = (
             self._keyword_search(
                 query,
                 retrieval_k,
             )
         )
+
+        # --------------------------------------------------------------
+        # Normalize scores
+        # --------------------------------------------------------------
 
         semantic_raw = [
             float(item["score"])
@@ -523,6 +650,7 @@ class HybridIndexer:
         semantic_map = {
             item["candidate_id"]:
                 semantic_normalized[index]
+
             for index, item in enumerate(
                 semantic_results
             )
@@ -531,10 +659,62 @@ class HybridIndexer:
         keyword_map = {
             item["candidate_id"]:
                 keyword_normalized[index]
+
             for index, item in enumerate(
                 keyword_results
             )
         }
+
+        # --------------------------------------------------------------
+        # Source map
+        # --------------------------------------------------------------
+
+        source_map: dict[str, str] = {}
+
+        for item in semantic_results:
+
+            candidate_id = item.get(
+                "candidate_id",
+                "",
+            )
+
+            source = item.get(
+                "source",
+                "",
+            )
+
+            if candidate_id and source:
+
+                source_map[
+                    candidate_id
+                ] = str(source)
+
+        for item in keyword_results:
+
+            candidate_id = item.get(
+                "candidate_id",
+                "",
+            )
+
+            source = item.get(
+                "source",
+                "",
+            )
+
+            if (
+                candidate_id
+                and source
+                and candidate_id
+                not in source_map
+            ):
+
+                source_map[
+                    candidate_id
+                ] = str(source)
+
+        # --------------------------------------------------------------
+        # Candidate union
+        # --------------------------------------------------------------
 
         candidate_ids = (
             set(semantic_map)
@@ -567,12 +747,34 @@ class HybridIndexer:
                 * keyword_score
             )
 
+            source = source_map.get(
+                candidate_id,
+                "",
+            )
+
+            # Final fallback
+            if not source:
+
+                fallback = (
+                    Path(
+                        self.settings.resume_dir
+                    )
+                    / f"{candidate_id}.pdf"
+                )
+
+                if fallback.exists():
+
+                    source = str(
+                        fallback
+                    )
+
             results.append(
                 HybridSearchResult(
                     candidate_id=candidate_id,
                     hybrid_score=hybrid_score,
                     semantic_score=semantic_score,
                     keyword_score=keyword_score,
+                    source=source,
                 )
             )
 
@@ -584,6 +786,7 @@ class HybridIndexer:
 
         return results[:top_k]
 
+
     # ------------------------------------------------------------------
     # INFO
     # ------------------------------------------------------------------
@@ -594,6 +797,7 @@ class HybridIndexer:
         return len(
             self.documents
         )
+
 
     @property
     def semantic_index_size(self) -> int:

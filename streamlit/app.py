@@ -1,4 +1,5 @@
 from __future__ import annotations
+from concurrent.futures import ThreadPoolExecutor
 
 import sys
 from pathlib import Path
@@ -28,6 +29,7 @@ from core.filters import apply_filters
 from core.re_ranker import rerank_candidates
 from core.evaluator import CandidateEvaluator
 from core.memory_rag import RecruiterMemoryStore
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 # ============================================================================
@@ -51,32 +53,37 @@ st.markdown(
     <style>
 
     /* =====================================================================
-       MAIN APPLICATION
+       GLOBAL
        ===================================================================== */
 
     .stApp {
-        background-color: #0b0f17 !important;
+        background-color: #ffffff !important;
+        color: #000000 !important;
+    }
+
+    [data-testid="stAppViewContainer"] {
+        background-color: #ffffff !important;
     }
 
     .main {
-        background-color: #0b0f17 !important;
+        background-color: #ffffff !important;
     }
 
     .main .block-container {
-        max-width: 1250px;
-        padding-top: 2.5rem;
-        padding-bottom: 3rem;
-        padding-left: 3rem;
-        padding-right: 3rem;
+        max-width: 1250px !important;
+        padding-top: 2.5rem !important;
+        padding-bottom: 3rem !important;
+        padding-left: 3rem !important;
+        padding-right: 3rem !important;
     }
 
 
     /* =====================================================================
-       MAIN TITLE
+       TITLE
        ===================================================================== */
 
     .hireflow-title {
-        color: #ffffff !important;
+        color: #000000 !important;
         font-size: 42px !important;
         font-weight: 800 !important;
         line-height: 1.2 !important;
@@ -93,7 +100,7 @@ st.markdown(
        ===================================================================== */
 
     .hireflow-subtitle {
-        color: #cbd5e1 !important;
+        color: #333333 !important;
         font-size: 17px !important;
         font-weight: 400 !important;
         line-height: 1.5 !important;
@@ -104,80 +111,139 @@ st.markdown(
 
 
     /* =====================================================================
-       SECTION TITLES
+       HEADINGS
        ===================================================================== */
 
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
+        color: #000000 !important;
+    }
+
     .section-title {
-        color: #ffffff !important;
+        color: #000000 !important;
         font-size: 27px !important;
         font-weight: 750 !important;
         line-height: 1.3 !important;
         margin-top: 26px !important;
         margin-bottom: 14px !important;
-        opacity: 1 !important;
-    }
-
-    h1, h2, h3, h4, h5, h6 {
-        color: #ffffff !important;
     }
 
 
     /* =====================================================================
-       NORMAL TEXT
+       TEXT
        ===================================================================== */
 
     .main p,
     .main span,
-    .main label,
-    .main div {
-        color: inherit;
+    .main li {
+        color: #000000 !important;
     }
 
     .main [data-testid="stMarkdownContainer"] p {
-        color: #e5e7eb;
+        color: #000000 !important;
     }
 
-    .main [data-testid="stCaptionContainer"] {
-        color: #aeb8c7 !important;
+    .main [data-testid="stCaptionContainer"],
+    .main [data-testid="stCaptionContainer"] p {
+        color: #555555 !important;
     }
 
 
     /* =====================================================================
-       STREAMLIT INPUT LABELS
+       LABELS
        ===================================================================== */
 
-    .main label {
-        color: #cbd5e1 !important;
-        font-weight: 500 !important;
-    }
-
+    .main label,
+    .main [data-testid="stWidgetLabel"],
     .main [data-testid="stWidgetLabel"] p {
-        color: #cbd5e1 !important;
+        color: #000000 !important;
+        font-weight: 600 !important;
     }
 
 
     /* =====================================================================
-       TEXT INPUT / TEXT AREA / NUMBER INPUT
+       TEXT INPUT
        ===================================================================== */
 
-    .main input,
-    .main textarea {
-        color: #111827 !important;
-        background-color: #f8fafc !important;
-        border: 1px solid #cbd5e1 !important;
+    .main input {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+
+        border: 1.5px solid #9ca3af !important;
         border-radius: 8px !important;
+
+        box-shadow: none !important;
     }
 
-    .main input::placeholder,
-    .main textarea::placeholder {
-        color: #64748b !important;
+    .main input:hover {
+        border-color: #555555 !important;
+    }
+
+    .main input:focus {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+
+        border: 2px solid #000000 !important;
+
+        box-shadow: none !important;
+    }
+
+    .main input::placeholder {
+        color: #666666 !important;
         opacity: 1 !important;
     }
 
-    .main input:focus,
+
+    /* =====================================================================
+       TEXT AREA
+       ===================================================================== */
+
+    .main textarea {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+
+        border: 1.5px solid #9ca3af !important;
+        border-radius: 8px !important;
+
+        box-shadow: none !important;
+    }
+
+    .main textarea:hover {
+        border-color: #555555 !important;
+    }
+
     .main textarea:focus {
-        border-color: #64748b !important;
-        box-shadow: 0 0 0 1px #64748b !important;
+        background-color: #ffffff !important;
+        color: #000000 !important;
+
+        border: 2px solid #000000 !important;
+
+        box-shadow: none !important;
+    }
+
+    .main textarea::placeholder {
+        color: #666666 !important;
+        opacity: 1 !important;
+    }
+
+
+    /* =====================================================================
+       NUMBER INPUT
+       ===================================================================== */
+
+    .main [data-testid="stNumberInput"] {
+        border-radius: 8px !important;
+    }
+
+    .main [data-testid="stNumberInput"] input {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+
+        border: 1.5px solid #9ca3af !important;
     }
 
 
@@ -186,22 +252,31 @@ st.markdown(
        ===================================================================== */
 
     [data-testid="stFileUploader"] {
-        background-color: #f8fafc !important;
-        border-radius: 10px !important;
-    }
+        background-color: #ffffff !important;
 
-    [data-testid="stFileUploader"] label {
-        color: #334155 !important;
+        border: 1.5px solid #9ca3af !important;
+        border-radius: 10px !important;
+
+        padding: 8px !important;
     }
 
     [data-testid="stFileUploaderDropzone"] {
-        background-color: #f8fafc !important;
-        border: 1px solid #cbd5e1 !important;
-        border-radius: 10px !important;
+        background-color: #ffffff !important;
+
+        border: 1.5px dashed #9ca3af !important;
+        border-radius: 8px !important;
+    }
+
+    [data-testid="stFileUploaderDropzone"]:hover {
+        border-color: #000000 !important;
     }
 
     [data-testid="stFileUploaderDropzone"] * {
-        color: #475569 !important;
+        color: #000000 !important;
+    }
+
+    [data-testid="stFileUploader"] label {
+        color: #000000 !important;
     }
 
 
@@ -210,11 +285,31 @@ st.markdown(
        ===================================================================== */
 
     .stButton > button {
+        background-color: #000000 !important;
+        color: #ffffff !important;
+
+        border: 1.5px solid #000000 !important;
         border-radius: 8px !important;
+
         font-weight: 700 !important;
+
         min-height: 42px !important;
-        padding-left: 18px !important;
-        padding-right: 18px !important;
+
+        padding-left: 20px !important;
+        padding-right: 20px !important;
+
+        box-shadow: none !important;
+    }
+
+    .stButton > button:hover {
+        background-color: #333333 !important;
+        color: #ffffff !important;
+        border-color: #000000 !important;
+    }
+
+    .stButton > button p,
+    .stButton > button span {
+        color: #ffffff !important;
     }
 
 
@@ -223,29 +318,37 @@ st.markdown(
        ===================================================================== */
 
     [data-testid="stMetric"] {
-        background-color: #151b26 !important;
-        border: 1px solid #293241 !important;
-        border-radius: 12px !important;
+        background-color: #ffffff !important;
+
+        border: 1.5px solid #c7c7c7 !important;
+        border-radius: 10px !important;
+
         padding: 14px !important;
+
+        box-shadow: none !important;
     }
 
-    [data-testid="stMetricLabel"] {
-        color: #aeb8c7 !important;
+    [data-testid="stMetricLabel"],
+    [data-testid="stMetricLabel"] p {
+        color: #555555 !important;
     }
 
     [data-testid="stMetricValue"] {
-        color: #ffffff !important;
+        color: #000000 !important;
     }
 
 
     /* =====================================================================
-       RESULT CARDS
+       CANDIDATE CARDS
        ===================================================================== */
 
     [data-testid="stVerticalBlockBorderWrapper"] {
-        background-color: #121823 !important;
-        border: 1px solid #293241 !important;
-        border-radius: 14px !important;
+        background-color: #ffffff !important;
+
+        border: 1.5px solid #c7c7c7 !important;
+        border-radius: 12px !important;
+
+        box-shadow: none !important;
     }
 
 
@@ -254,22 +357,76 @@ st.markdown(
        ===================================================================== */
 
     [data-testid="stExpander"] {
-        background-color: #121823 !important;
-        border: 1px solid #293241 !important;
-        border-radius: 10px !important;
+        background-color: #ffffff !important;
+
+        border: 1.5px solid #c7c7c7 !important;
+        border-radius: 9px !important;
     }
 
     [data-testid="stExpander"] summary {
-        color: #e5e7eb !important;
+        color: #000000 !important;
+    }
+
+    [data-testid="stExpander"] summary span {
+        color: #000000 !important;
     }
 
 
     /* =====================================================================
-       DIVIDERS
+       SELECTBOX
+       ===================================================================== */
+
+    .main [data-baseweb="select"] > div {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+
+        border: 1.5px solid #9ca3af !important;
+        border-radius: 8px !important;
+    }
+
+    .main [data-baseweb="select"] * {
+        color: #000000 !important;
+    }
+
+
+    /* =====================================================================
+       RADIO
+       ===================================================================== */
+
+    .main [data-testid="stRadio"] label,
+    .main [data-testid="stRadio"] label p {
+        color: #000000 !important;
+    }
+
+
+    /* =====================================================================
+       DIVIDER
        ===================================================================== */
 
     .main hr {
-        border-color: #293241 !important;
+        border: none !important;
+        border-top: 1px solid #d0d0d0 !important;
+    }
+
+
+    /* =====================================================================
+       ALERTS
+       ===================================================================== */
+
+    [data-testid="stAlert"] {
+        border: 1px solid #c7c7c7 !important;
+        border-radius: 8px !important;
+    }
+
+
+    /* =====================================================================
+       PROGRESS BAR
+       ===================================================================== */
+
+    [data-testid="stProgress"] {
+        border: 1px solid #c7c7c7 !important;
+        border-radius: 8px !important;
+        overflow: hidden !important;
     }
 
 
@@ -277,30 +434,44 @@ st.markdown(
        SIDEBAR
        ===================================================================== */
 
-    [data-testid="stSidebar"] {
-        background-color: #eef2f7 !important;
+    [data-testid="stSidebar"],
+    [data-testid="stSidebarContent"] {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+
+        border-right: 1.5px solid #d0d0d0 !important;
     }
 
     [data-testid="stSidebar"] * {
-        color: #1f2937;
+        color: #000000 !important;
     }
 
     [data-testid="stSidebar"] h1,
     [data-testid="stSidebar"] h2,
-    [data-testid="stSidebar"] h3 {
-        color: #1f2937 !important;
+    [data-testid="stSidebar"] h3,
+    [data-testid="stSidebar"] h4 {
+        color: #000000 !important;
     }
 
 
-    /* Sidebar status */
+    /* =====================================================================
+       SIDEBAR STATUS
+       ===================================================================== */
 
     .status-ready {
-        background-color: #123c29;
-        color: #67e8a5 !important;
+        background-color: #ffffff !important;
+
+        color: #000000 !important;
+
+        border: 1.5px solid #198754 !important;
+        border-radius: 9px !important;
+
         padding: 12px 14px;
-        border-radius: 9px;
+
         text-align: center;
+
         font-weight: 700;
+
         margin-top: 10px;
         margin-bottom: 12px;
     }
@@ -311,17 +482,31 @@ st.markdown(
        ===================================================================== */
 
     [data-testid="stSidebar"] [data-testid="stMetric"] {
-        background-color: #151a24 !important;
-        border: 1px solid #252c39 !important;
-        border-radius: 11px !important;
+        background-color: #ffffff !important;
+
+        border: 1.5px solid #c7c7c7 !important;
+        border-radius: 10px !important;
+
+        padding: 14px !important;
     }
 
-    [data-testid="stSidebar"] [data-testid="stMetricLabel"] {
-        color: #aab3c2 !important;
+    [data-testid="stSidebar"] [data-testid="stMetricLabel"],
+    [data-testid="stSidebar"] [data-testid="stMetricLabel"] p {
+        color: #555555 !important;
     }
 
     [data-testid="stSidebar"] [data-testid="stMetricValue"] {
-        color: #e5e7eb !important;
+        color: #000000 !important;
+    }
+
+
+    /* =====================================================================
+       SIDEBAR RADIO
+       ===================================================================== */
+
+    [data-testid="stSidebar"] [data-testid="stRadio"] label,
+    [data-testid="stSidebar"] [data-testid="stRadio"] label p {
+        color: #000000 !important;
     }
 
 
@@ -332,9 +517,9 @@ st.markdown(
     @media (max-width: 768px) {
 
         .main .block-container {
-            padding-left: 1rem;
-            padding-right: 1rem;
-            padding-top: 1.5rem;
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+            padding-top: 1.5rem !important;
         }
 
         .hireflow-title {
@@ -391,6 +576,9 @@ if "candidate_cache" not in st.session_state:
 if "uploaded_candidates" not in st.session_state:
     st.session_state.uploaded_candidates = []
 
+if "candidate_sources" not in st.session_state:
+    st.session_state.candidate_sources = {}
+
 
 # ============================================================================
 # SERVICES
@@ -412,7 +600,7 @@ def get_memory_store():
 
 
 # ============================================================================
-# HELPER FUNCTIONS
+# HELPERS
 # ============================================================================
 
 def clean_skill_list(value: str) -> list[str]:
@@ -469,48 +657,81 @@ def build_job_description(
     )
 
 
-def get_candidate(candidate_id: str):
+def resolve_resume_path(
+    candidate_id: str,
+    source: str = "",
+) -> Path | None:
+    """Resolve the candidate PDF from indexed source or candidate ID."""
 
-    if candidate_id in st.session_state.candidate_cache:
-        return st.session_state.candidate_cache[candidate_id]
+    if source:
+        source_path = Path(source)
+        if source_path.exists():
+            return source_path
 
-    resume_path = (
-        Path(settings.resume_dir)
-        / f"{candidate_id}.pdf"
+        relative_path = Path(settings.resume_dir) / source_path.name
+        if relative_path.exists():
+            return relative_path
+
+    exact_path = Path(settings.resume_dir) / f"{candidate_id}.pdf"
+    if exact_path.exists():
+        return exact_path
+
+    resume_dir = Path(settings.resume_dir)
+    if not resume_dir.exists():
+        return None
+
+    normalized_id = (
+        candidate_id.lower().replace(" ", "_").replace("-", "_")
     )
 
-    if not resume_path.exists():
+    for pdf_path in resume_dir.glob("*.pdf"):
+        normalized_name = (
+            pdf_path.stem.lower().replace(" ", "_").replace("-", "_")
+        )
+        if normalized_name == normalized_id:
+            return pdf_path
+
+    return None
+
+
+def get_candidate(
+    candidate_id: str,
+    source: str = "",
+):
+    """Load a candidate from cache or parse the source resume PDF."""
+
+    cached = st.session_state.candidate_cache.get(candidate_id)
+    if cached is not None:
+        return cached
+
+    resume_path = resolve_resume_path(candidate_id, source)
+    if resume_path is None:
         return None
 
     try:
-
         candidate = parse_candidate_pdf(
             resume_path,
             candidate_id=candidate_id,
         )
-
     except TypeError:
-
         try:
-            candidate = parse_candidate_pdf(
-                resume_path
-            )
-        except Exception:
+            candidate = parse_candidate_pdf(resume_path)
+        except Exception as exc:
+            st.session_state[f"parse_error_{candidate_id}"] = str(exc)
             return None
-
-    except Exception:
+    except Exception as exc:
+        st.session_state[f"parse_error_{candidate_id}"] = str(exc)
         return None
 
-    st.session_state.candidate_cache[
-        candidate_id
-    ] = candidate
-
+    st.session_state.candidate_cache[candidate_id] = candidate
+    st.session_state.pop(f"parse_error_{candidate_id}", None)
     return candidate
 
 
 def result_to_dict(result) -> dict:
 
     if hasattr(result, "to_dict"):
+
         return result.to_dict()
 
     return {
@@ -519,6 +740,7 @@ def result_to_dict(result) -> dict:
             "candidate_id",
             "",
         ),
+        "source": str(getattr(result, "source", "")),
         "hybrid_score": float(
             getattr(
                 result,
@@ -615,7 +837,7 @@ st.markdown(
 
 
 # ============================================================================
-# SEARCH CANDIDATES PAGE
+# SEARCH PAGE
 # ============================================================================
 
 if page == "Search Candidates":
@@ -683,7 +905,6 @@ if page == "Search Candidates":
 
                     candidate_id = destination.stem
 
-                    # Index resume.
                     indexer.add_resume(
                         destination,
                         candidate_id=candidate_id,
@@ -697,6 +918,7 @@ if page == "Search Candidates":
                     if candidate_id not in (
                         st.session_state.uploaded_candidates
                     ):
+
                         st.session_state.uploaded_candidates.append(
                             candidate_id
                         )
@@ -734,7 +956,7 @@ if page == "Search Candidates":
 
 
     # ========================================================================
-    # SEARCH SECTION
+    # SEARCH CANDIDATES
     # ========================================================================
 
     st.markdown(
@@ -790,7 +1012,7 @@ if page == "Search Candidates":
 
 
     # ========================================================================
-    # SEARCH
+    # SEARCH EXECUTION
     # ========================================================================
 
     if search_button:
@@ -816,13 +1038,14 @@ if page == "Search Candidates":
 
         indexer = get_indexer()
 
-        # --------------------------------------------------------------------
-        # INDEX CHECK
-        # --------------------------------------------------------------------
-
         try:
-            index_size = indexer.semantic_index_size
+
+            index_size = (
+                indexer.semantic_index_size
+            )
+
         except Exception:
+
             index_size = 0
 
         if index_size == 0:
@@ -833,10 +1056,6 @@ if page == "Search Candidates":
             )
 
             st.stop()
-
-        # --------------------------------------------------------------------
-        # HYBRID SEARCH
-        # --------------------------------------------------------------------
 
         search_query = query.strip()
 
@@ -871,35 +1090,73 @@ if page == "Search Candidates":
         # --------------------------------------------------------------------
 
         parsed_candidates = []
-
         retrieval_map = {}
+        candidates_to_parse = []
 
+        # Prepare retrieval metadata first. Candidates already cached in this
+        # Streamlit session are reused without another Gemini call.
         for result in hybrid_results:
+            result_dict = result_to_dict(result)
+            candidate_id = result_dict["candidate_id"]
 
-            result_dict = result_to_dict(
-                result
-            )
+            retrieval_map[candidate_id] = result_dict
 
-            candidate_id = result_dict[
-                "candidate_id"
-            ]
-
-            retrieval_map[
-                candidate_id
-            ] = result_dict
-
-            candidate = get_candidate(
-                candidate_id
-            )
-
-            if candidate is not None:
-
-                parsed_candidates.append(
-                    candidate
+            source = result_dict.get("source", "")
+            if not source:
+                source = str(
+                    Path(settings.resume_dir) / f"{candidate_id}.pdf"
                 )
 
+            st.session_state.candidate_sources[candidate_id] = source
+
+            cached = st.session_state.candidate_cache.get(candidate_id)
+            if cached is not None:
+                parsed_candidates.append(cached)
+            else:
+                resume_path = resolve_resume_path(candidate_id, source)
+                if resume_path is not None:
+                    candidates_to_parse.append(
+                        (candidate_id, resume_path)
+                    )
+
+        def _parse_candidate_for_search(item):
+            candidate_id, resume_path = item
+            try:
+                try:
+                    candidate = parse_candidate_pdf(
+                        resume_path,
+                        candidate_id=candidate_id,
+                    )
+                except TypeError:
+                    candidate = parse_candidate_pdf(resume_path)
+                return candidate_id, candidate, None
+            except Exception as exc:
+                return candidate_id, None, str(exc)
+
+        # Gemini structured parsing is the slowest part of search. Parse the
+        # retrieved candidates concurrently instead of making 10 sequential
+        # Gemini requests. The cap avoids creating excessive API concurrency.
+        if candidates_to_parse:
+            worker_count = min(5, len(candidates_to_parse))
+            with ThreadPoolExecutor(max_workers=worker_count) as executor:
+                futures = [
+                    executor.submit(
+                        _parse_candidate_for_search,
+                        item,
+                    )
+                    for item in candidates_to_parse
+                ]
+
+                for future in as_completed(futures):
+                    candidate_id, candidate, error = future.result()
+                    if candidate is not None:
+                        st.session_state.candidate_cache[candidate_id] = candidate
+                        parsed_candidates.append(candidate)
+                    elif error:
+                        st.session_state[f"parse_error_{candidate_id}"] = error
+
         # --------------------------------------------------------------------
-        # HARD FILTERS
+        # FILTER
         # --------------------------------------------------------------------
 
         filter_results = []
@@ -918,6 +1175,7 @@ if page == "Search Candidates":
                 )
 
             except Exception:
+
                 continue
 
         eligible_ids = {
@@ -937,12 +1195,10 @@ if page == "Search Candidates":
 
         else:
 
-            candidates_for_reranking = (
-                parsed_candidates
-            )
+            candidates_for_reranking = parsed_candidates
 
         # --------------------------------------------------------------------
-        # EXPLAINABLE RE-RANKING
+        # RE-RANK
         # --------------------------------------------------------------------
 
         reranked = []
@@ -978,21 +1234,13 @@ if page == "Search Candidates":
                     f"Re-ranking unavailable: {exc}"
                 )
 
-        # --------------------------------------------------------------------
-        # SAVE RESULTS
-        # --------------------------------------------------------------------
-
         if reranked:
 
-            st.session_state.search_results = (
-                reranked
-            )
+            st.session_state.search_results = reranked
 
         else:
 
-            st.session_state.search_results = (
-                hybrid_results
-            )
+            st.session_state.search_results = hybrid_results
 
         st.session_state.last_query = query
         st.session_state.last_job = job
@@ -1131,7 +1379,6 @@ if page == "Search Candidates":
                 strengths = []
                 concerns = []
 
-
             # =================================================================
             # CANDIDATE
             # =================================================================
@@ -1149,6 +1396,7 @@ if page == "Search Candidates":
             if candidate:
 
                 if candidate.name.strip():
+
                     candidate_name = candidate.name
 
                 candidate_location = candidate.location
@@ -1157,9 +1405,8 @@ if page == "Search Candidates":
                     candidate.total_experience_years
                 )
 
-
             # =================================================================
-            # RESULT CARD
+            # CARD
             # =================================================================
 
             with st.container(border=True):
@@ -1213,7 +1460,6 @@ if page == "Search Candidates":
                             final_score
                         ),
                     )
-
 
                 # =============================================================
                 # SCORE BREAKDOWN
@@ -1285,9 +1531,8 @@ if page == "Search Candidates":
                                 f"• {item}"
                             )
 
-
                 # =============================================================
-                # AI EVALUATION BUTTON
+                # AI EVALUATION
                 # =============================================================
 
                 if st.button(
@@ -1295,39 +1540,51 @@ if page == "Search Candidates":
                     key=f"evaluate_{candidate_id}",
                 ):
 
+                    # Retry parsing on demand if search-time parsing failed.
                     if candidate is None:
-
-                        st.error(
-                            "Candidate resume could not be parsed."
+                        source = st.session_state.candidate_sources.get(
+                            candidate_id,
+                            "",
                         )
 
-                    else:
+                        with st.spinner("Loading candidate resume..."):
+                            candidate = get_candidate(
+                                candidate_id=candidate_id,
+                                source=source,
+                            )
 
+                    if candidate is None:
+                        parse_error = st.session_state.get(
+                            f"parse_error_{candidate_id}",
+                            "",
+                        )
+
+                        st.error(
+                            "Candidate resume could not be loaded or parsed."
+                        )
+
+                        if parse_error:
+                            st.caption(f"Parser error: {parse_error}")
+
+                    else:
                         job = st.session_state.last_job
 
                         if job is None:
-
                             st.error(
-                                "Job information is unavailable."
+                                "Job information is unavailable. "
+                                "Please perform a new search."
                             )
 
                         else:
-
                             with st.spinner(
                                 "Running structured AI evaluation..."
                             ):
-
                                 try:
+                                    evaluator = get_evaluator()
 
-                                    evaluator = (
-                                        get_evaluator()
-                                    )
-
-                                    evaluation = (
-                                        evaluator.evaluate(
-                                            candidate,
-                                            job,
-                                        )
+                                    evaluation = evaluator.evaluate_candidate(
+                                        candidate,
+                                        job,
                                     )
 
                                     st.session_state[
@@ -1339,12 +1596,8 @@ if page == "Search Candidates":
                                     ] += 1
 
                                 except Exception as exc:
-
-                                    st.error(
-                                        "AI evaluation failed: "
-                                        f"{exc}"
-                                    )
-
+                                    st.error("AI evaluation failed.")
+                                    st.exception(exc)
 
                 # =============================================================
                 # AI EVALUATION RESULT
@@ -1467,7 +1720,7 @@ else:
     memory = memory_store.load()
 
     # ========================================================================
-    # MEMORY
+    # RECRUITER PREFERENCES
     # ========================================================================
 
     st.subheader(
@@ -1554,7 +1807,7 @@ else:
 
 
     # ========================================================================
-    # ADD MEMORY
+    # ADD PREFERENCE
     # ========================================================================
 
     st.divider()
